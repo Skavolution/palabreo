@@ -1,0 +1,11 @@
+name = "palabreo"
+main = "src/index.ts"
+compatibility_date = "2026-09-01"
+compatibility_flags = ["nodejs_compat"]
+
+# Secrets (never commit them):
+#   npx wrangler secret put ANTHROPIC_API_KEY
+#   npx wrangler secret put APP_TOKEN        # any long random string; paste the same in the app's Ajustes
+# Optional, to make the AI fallback cheaper:
+# [vars]
+# MODEL = "claude-haiku-4-5"
