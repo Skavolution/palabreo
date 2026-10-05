@@ -8,10 +8,16 @@ export interface Settings {
   pixabayKey: string;
   theme: 'auto' | 'light' | 'dark';
   voiceURI: string;
+  /** Write mode input; '' = not chosen yet (pen users start on the pad). */
+  writeInput: '' | 'draw' | 'type';
+  /** A stylus has been seen on this device. */
+  penSeen: boolean;
+  gboardTipDismissed: boolean;
 }
 
 const DEFAULTS: Settings = {
   proxyUrl: '', proxyToken: '', aiFallback: false, pexelsKey: '', pixabayKey: '', theme: 'auto', voiceURI: '',
+  writeInput: '', penSeen: false, gboardTipDismissed: false,
 };
 const KEY = 'palabreo-settings';
 

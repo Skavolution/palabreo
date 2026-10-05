@@ -5,6 +5,11 @@ import { gradeCard, isDue } from '../srs';
 import { speakWord } from '../speech';
 import { CardMedia, Topbar, useNav, type StudyMode } from '../ui';
 import type { Card, Grade } from '../types';
+import { getSettings, saveSettings } from '../settings';
+import { InkPad } from '../handwriting/InkPad';
+import { gradeHandwriting } from '../handwriting/grade';
+import { googleRecognizer, nativeRecognizer, OfflineError, recognizeInk, recognizeWith } from '../handwriting/recognize';
+import type { Ink } from '../handwriting/ink';
 
 const shuffle = <T,>(a: T[]) => {
   const b = a.slice();
@@ -202,36 +207,119 @@ function MultipleChoice({ card, others, onDone }: { card: Card; others: Card[]; 
 }
 
 function Write({ card, onDone }: { card: Card; onDone: (ok: boolean) => void }) {
+  const { toast } = useNav();
+  // Handwriting first: it's the reason this mode exists. The choice is remembered.
+  const [mode, setMode] = useState<'draw' | 'type'>(() => getSettings().writeInput || 'draw');
   const [value, setValue] = useState('');
   const [stage, setStage] = useState<'idle' | 'retry' | 'done'>('idle');
   const [firstTry, setFirstTry] = useState(true);
-  const check = () => {
-    const right = normalize(value) === normalize(card.en);
-    if (right) setStage('done');
-    else { setStage('retry'); setFirstTry(false); }
-  };
+  const [read, setRead] = useState<{ text: string; close?: boolean } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [padKey, setPadKey] = useState(0);
+  const [tip, setTip] = useState(() => !getSettings().gboardTipDismissed);
+  const previewSeq = useRef(0);
+
+  const pass = () => setStage('done');
+  const miss = () => { setStage('retry'); setFirstTry(false); };
+
+  function switchMode(m: 'draw' | 'type') {
+    setMode(m);
+    saveSettings({ writeInput: m });
+    setRead(null);
+  }
+
+  const checkTyped = () => (normalize(value) === normalize(card.en) ? pass() : miss());
+
+  // Free preview while the pen rests: if it already reads right, accept without a tap.
+  async function preview(ink: Ink) {
+    const seq = ++previewSeq.current;
+    try {
+      const cands = await recognizeWith([nativeRecognizer, googleRecognizer], ink, async () => null);
+      if (seq !== previewSeq.current || stage === 'done') return;
+      setRead({ text: cands[0] ?? '' });
+      if (gradeHandwriting(cands, card.en).kind === 'correct') pass();
+    } catch {
+      /* preview is best-effort; "Comprobar" reports errors */
+    }
+  }
+
+  async function checkInk(ink: Ink, png: () => Promise<Blob | null>) {
+    previewSeq.current++;
+    setBusy(true);
+    try {
+      const v = gradeHandwriting(await recognizeInk(ink, png), card.en);
+      setRead({ text: v.read, close: v.kind === 'close' });
+      if (v.kind === 'wrong') { miss(); setPadKey((k) => k + 1); }
+      else pass();
+    } catch (e) {
+      toast(e instanceof OfflineError
+        ? 'Para leer tu letra necesito internet. Mientras tanto usa ⌨️ Teclado.'
+        : 'No pude leer tu letra. Inténtalo de nuevo o usa ⌨️ Teclado.');
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const done = stage === 'done';
   return (
     <div className="stage">
       <div className="card-media"><CardMedia imageUrl={card.imageUrl} emoji={card.emoji} size={100} /></div>
       <div className="card-es" style={{ margin: '8px 0' }}>{card.es || '—'}</div>
       <Practice card={card} />
-      {stage === 'retry' && (
-        <p className="feedback wrong">No era así. La palabra es <strong>{card.en}</strong>; escríbela para continuar.</p>
-      )}
-      <input
-        className={`write-input${stage === 'done' ? ' correct' : stage === 'retry' ? ' wrong' : ''}`}
-        style={{ marginTop: 14 }} placeholder="Escribe en inglés…" autoComplete="off" autoCapitalize="off" autoCorrect="off" spellCheck={false}
-        value={value} disabled={stage === 'done'} onChange={(e) => setValue(e.target.value)}
-        onKeyDown={(e) => { if (e.key === 'Enter' && stage !== 'done') check(); }}
-      />
-      {stage === 'done' ? (
-        <>
-          <p className="feedback correct">{firstTry ? '¡Correcto! 🎉' : '¡Bien! Ya la escribiste correctamente 💪'}</p>
-          <button className="btn btn-primary btn-block" style={{ maxWidth: 420 }} onClick={() => onDone(firstTry)}>Siguiente</button>
-        </>
-      ) : (
-        <button className="btn btn-primary btn-block" style={{ marginTop: 14, maxWidth: 420 }} onClick={check}>Comprobar</button>
-      )}
+
+      <div className="write-box">
+        <div className="seg-toggle" role="tablist">
+          <button role="tab" aria-selected={mode === 'draw'} className={`seg-btn${mode === 'draw' ? ' active' : ''}`} disabled={done} onClick={() => switchMode('draw')}>✏️ A mano</button>
+          <button role="tab" aria-selected={mode === 'type'} className={`seg-btn${mode === 'type' ? ' active' : ''}`} disabled={done} onClick={() => switchMode('type')}>⌨️ Teclado</button>
+        </div>
+
+        {stage === 'retry' && (
+          <div className="write-reveal">
+            <div className="write-reveal-label">
+              {mode === 'draw' && read?.text ? <>Leí «{read.text}». </> : 'No era así. '}La palabra es:
+            </div>
+            <div className="write-reveal-word">{card.en}</div>
+            <div className="write-reveal-label">Escríbela para continuar</div>
+          </div>
+        )}
+
+        {mode === 'draw' ? (
+          <>
+            <InkPad key={padKey} disabled={done} busy={busy} onIdle={preview} onSubmit={checkInk} />
+            {!done && <div className="canvas-hint">{read?.text ? <>Leo: <strong>«{read.text}»</strong></> : 'Escribe la palabra en inglés con el lápiz'}</div>}
+          </>
+        ) : (
+          <>
+            <input
+              className={`write-input${done ? ' correct' : stage === 'retry' ? ' wrong' : ''}`}
+              placeholder="Escribe en inglés…" autoComplete="off" autoCapitalize="none" autoCorrect="off" spellCheck={false}
+              enterKeyHint="done" inputMode="text"
+              value={value} disabled={done} onChange={(e) => setValue(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter' && !done) checkTyped(); }}
+            />
+            {!done && <button className="btn btn-primary btn-block" onClick={checkTyped}>Comprobar</button>}
+            {tip && !done && (
+              <div className="stylus-tip">
+                <span>✒️</span>
+                <span>
+                  ¿Quieres escribir con el lápiz aquí? Activa la escritura a mano de Gboard: <strong>Ajustes de Gboard → Idiomas → English → Escritura a mano</strong>. Luego toca el ícono 🌐 o ✍️ del teclado para cambiar a ese modo.
+                </span>
+                <button className="iconbtn" aria-label="Cerrar consejo" onClick={() => { setTip(false); saveSettings({ gboardTipDismissed: true }); }}>✕</button>
+              </div>
+            )}
+          </>
+        )}
+
+        {done && (
+          <>
+            <p className="feedback correct">
+              {read?.close ? <>Lo leí como «{read.text}», pero tu letra también encaja con «{card.en}». ¡Correcto! 🎉</>
+                : firstTry ? '¡Correcto! 🎉' : '¡Bien! Ya la escribiste correctamente 💪'}
+            </p>
+            <button className="btn btn-primary btn-block" onClick={() => onDone(firstTry)}>Siguiente</button>
+          </>
+        )}
+      </div>
     </div>
   );
 }

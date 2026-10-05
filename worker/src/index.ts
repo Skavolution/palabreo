@@ -5,6 +5,8 @@ import Anthropic from '@anthropic-ai/sdk';
  *  GET  /fetch?url=…   CORS proxy, only for the free sources the app uses.
  *  POST /enrich        Claude fills just the card fields the free sources missed.
  *  POST /extract       Claude reads a textbook page photo when free OCR is not enough.
+ *  POST /handwriting   Relay to Google's free handwriting recognizer (if the browser is blocked).
+ *  POST /recognize     Claude reads the handwriting pad's PNG (paid fallback, opt-in in the app).
  * Every route requires `Authorization: Bearer <APP_TOKEN>` (it's a personal app).
  */
 export interface Env {
@@ -52,6 +54,8 @@ export default {
       if (req.method === 'GET' && url.pathname === '/fetch') return await proxy(req, url);
       if (req.method === 'POST' && url.pathname === '/enrich') return await enrich(req, env);
       if (req.method === 'POST' && url.pathname === '/extract') return await extract(req, env);
+      if (req.method === 'POST' && url.pathname === '/handwriting') return await handwriting(req);
+      if (req.method === 'POST' && url.pathname === '/recognize') return await recognize(req, env);
       return json({ error: 'not found' }, 404);
     } catch (e) {
       if (e instanceof Anthropic.RateLimitError) return json({ error: 'rate_limited' }, 429);
@@ -112,6 +116,41 @@ async function enrich(req: Request, env: Env): Promise<Response> {
     additionalProperties: false,
   };
   return json(await askJson(env, [{ type: 'text', text: prompt }], schema));
+}
+
+/** Relay to Google's free handwriting engine when the browser can't call it directly. */
+async function handwriting(req: Request): Promise<Response> {
+  const r = await fetch('https://inputtools.google.com/request?ime=handwriting&app=mobilesearch&cs=1&oe=UTF-8', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: await req.text(),
+  });
+  return new Response(r.body, { status: r.status, headers: { 'Content-Type': 'application/json', ...CORS } });
+}
+
+/** Read one handwritten English word from a PNG of the practice pad (paid fallback). */
+async function recognize(req: Request, env: Env): Promise<Response> {
+  const body = (await req.json()) as { data?: string };
+  if (!body.data) return json({ error: 'imagen no válida' }, 400);
+  const schema = {
+    type: 'object',
+    properties: { candidates: { type: 'array', items: { type: 'string' } } },
+    required: ['candidates'],
+    additionalProperties: false,
+  };
+  const prompt =
+    'La imagen muestra una palabra o frase corta en inglés escrita a mano por un estudiante que practica ortografía. ' +
+    'Transcribe exactamente lo que está escrito, letra por letra, aunque tenga errores de ortografía (no lo corrijas). ' +
+    'En "candidates" pon tu mejor lectura primero y, si alguna letra es ambigua, hasta 4 lecturas alternativas.';
+  const result = await askJson<{ candidates: string[] }>(
+    env,
+    [
+      { type: 'image', source: { type: 'base64', media_type: 'image/png', data: body.data } },
+      { type: 'text', text: prompt },
+    ],
+    schema,
+  );
+  return json({ candidates: result.candidates.map((c) => c.trim()).filter(Boolean).slice(0, 5) });
 }
 
 async function extract(req: Request, env: Env): Promise<Response> {

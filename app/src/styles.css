@@ -154,6 +154,20 @@ img { max-width: 100%; }
 .feedback { font-size: 14px; font-weight: 700; min-height: 20px; margin: 10px 0; }
 .feedback.correct { color: var(--good); } .feedback.wrong { color: var(--bad); }
 
+.write-box { width: 100%; max-width: 560px; display: flex; flex-direction: column; gap: 12px; margin-top: 12px; }
+.write-box .write-input { max-width: none; }
+.seg-toggle { display: flex; gap: 6px; background: var(--surface-2); padding: 4px; border-radius: 999px; }
+.seg-btn { flex: 1; border: none; background: none; padding: 10px; border-radius: 999px; font-weight: 700; font-size: 14px; color: var(--ink-soft); }
+.seg-btn.active { background: var(--surface); color: var(--ink); box-shadow: var(--shadow-sm); }
+.write-reveal { display: flex; flex-direction: column; align-items: center; gap: 4px; background: var(--bad-soft); border-radius: 16px; padding: 12px 16px; text-align: center; }
+.write-reveal-label { font-size: 13px; font-weight: 700; color: var(--bad); }
+.write-reveal-word { font-family: var(--font-display); font-size: 28px; font-weight: 700; color: var(--bad); letter-spacing: .5px; }
+.inkpad-canvas { display: block; width: 100%; border-radius: 16px; border: 2px solid var(--border-strong); background: #fff; touch-action: none; user-select: none; -webkit-user-select: none; cursor: crosshair; }
+.inkpad-canvas.disabled { opacity: .6; cursor: default; }
+.canvas-hint { font-size: 13px; color: var(--ink-soft); text-align: center; }
+.stylus-tip { display: flex; gap: 8px; align-items: flex-start; background: var(--indigo-soft); color: var(--indigo); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; text-align: left; }
+.stylus-tip .iconbtn { width: 28px; height: 28px; font-size: 12px; }
+
 .match-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 9px; width: 100%; }
 .match-tile { background: var(--surface); border: 1.5px solid var(--border-strong); border-radius: 12px; padding: 14px 10px; font-size: 13.5px; font-weight: 700; min-height: 56px; }
 .match-tile.picked { border-color: var(--accent); background: var(--accent-soft); }

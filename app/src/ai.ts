@@ -25,6 +25,12 @@ export async function aiExtract(image: Blob): Promise<{ title: string; words: { 
   return call('/extract', { mediaType: image.type || 'image/jpeg', data });
 }
 
+/** Read a handwritten word from the practice pad's PNG with Claude vision. */
+export async function aiRecognize(png: Blob): Promise<string[]> {
+  const { candidates } = await call<{ candidates: string[] }>('/recognize', { data: await blobToBase64(png) });
+  return candidates;
+}
+
 function blobToBase64(b: Blob): Promise<string> {
   return new Promise((resolve, reject) => {
     const fr = new FileReader();

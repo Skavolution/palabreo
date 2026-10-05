@@ -16,6 +16,14 @@ Fichas de vocabulario en inglés para hispanohablantes, como app web instalable 
 
 Todo se guarda en caché en el dispositivo, así que cada palabra se busca una sola vez. Si en Ajustes conectas el Worker y activas **«Completar con IA»**, Claude rellena solo los campos que quedaron vacíos (por ejemplo la IPA de habla nativa) y puede leer fotos difíciles.
 
+## Escribir a mano con el lápiz
+
+En el modo **Escribir** hay dos pestañas:
+
+- **✏️ A mano**: escribes la palabra con el lápiz en el recuadro. Palabreo envía los **trazos** al reconocedor de escritura de Google, el mismo motor del teclado Gboard. Es gratis, sin key, y entiende cursiva e imprenta. Si al dejar de escribir ya leyó la palabra correcta, la acepta sola. Si una letra es ambigua (por ejemplo «rn» y «m») y la palabra correcta aparece entre las lecturas alternativas, también cuenta, y te dice qué leyó. Cuando se detecta un lápiz activo, se ignoran los toques de la palma.
+  - Orden de los reconocedores: primero el del navegador, si existe (sin conexión); luego Google (directo, o a través del Worker si el navegador lo bloquea); y por último, solo si activaste «Completar con IA», Claude visión.
+- **⌨️ Teclado**: un campo de texto preparado para la escritura a mano de **Gboard** (Ajustes de Gboard → Idiomas → English → Escritura a mano).
+
 ## Estructura
 
 ```
